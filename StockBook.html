@@ -128,7 +128,7 @@
     .hero-banner-card {
         margin: 10px 0 12px;
         background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #075985 100%);
-        border-radius: 15px;
+        border-radius: 5px;
         padding: 18px;
         color: #ffffff;
         box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.35);
@@ -139,7 +139,7 @@
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 5px;
+        margin-bottom: 12px;
     }
     .hero-greeting {
         font-size: 17px;
@@ -190,8 +190,8 @@
         align-items: flex-end;
     }
     .hero-bal-amount {
-        font-size: 18px;
-        font-weight: 800;
+        font-size: 24px;
+        font-weight: 900;
         letter-spacing: -0.5px;
     }
 
@@ -1133,10 +1133,9 @@ font-size: 12px;
             border-bottom: 1px solid #d8e2ec;
         }
         body.app-logged-in .user-avatar-pill {
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid #d8e2ec;
-    margin-left: auto;
-   }
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid #d8e2ec;
+        }
         body.app-logged-in .app-header-left {
             display: none; /* brand now lives in the sidebar on desktop */
         }
@@ -1174,18 +1173,6 @@ font-size: 12px;
         body.app-logged-in .report-pdf-btn { padding: 10px 18px; font-size: 12.5px; }
         body.app-logged-in .report-menu-item-title { font-size: 14.5px; }
     }
-
-    /* ===== COMPACT DASHBOARD FOR COMPUTER / LAPTOP ===== */
-@media (min-width: 768px) {
-    .app-screen-section {
-        zoom: 0.98;
-    }
-
-    .hero-banner-card {
-        margin-top: 2px;
-        margin-bottom: 2px;
-    }
-}
 </style>
 
 </head>
@@ -1204,6 +1191,15 @@ font-size: 12px;
         <button class="side-nav-item" id="sideNav-reports" onclick="switchSection('reports')"><span class="icon">📈</span><span>Reports</span></button>
         <button class="side-nav-item" id="sideNav-settings" onclick="switchSection('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
     </div>
+
+    <div class="sidebar-footer">
+        <div class="sidebar-user-row" onclick="promptSimpleLogout()" title="Logout">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar">
+            <div style="flex:1; min-width:0;">
+                <div class="sidebar-user-name" id="sideUserNameLabel">User</div>
+                <div class="sidebar-user-logout">Logout</div>
+            </div>
+        </div>
     </div>
 </nav>
 
@@ -1300,7 +1296,10 @@ font-size: 12px;
             </div>
         </div>
 
-        
+        <div class="twin-action-row">
+            <button class="twin-cta-btn twin-cta-sync" onclick="syncWithGoogleDrive(true)">☁️ Sync Cloud</button>
+            <button class="twin-cta-btn twin-cta-open" onclick="switchSection('transaction')">📑 Open Sheet →</button>
+        </div>
 
         <div class="dashboard-lower-grid">
             <div class="lower-card-box">
