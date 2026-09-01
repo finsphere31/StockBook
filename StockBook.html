@@ -1816,41 +1816,105 @@ font-size: 12px;
         }
     }
 
-    function loadData() {
-        const pSaved = localStorage.getItem(`stock_products_${currentUser?.username || 'guest'}`);
-        if (pSaved) { try { products = JSON.parse(pSaved); } catch (e) { products = []; } }
-        else { products = []; }
-        const tSaved = localStorage.getItem(`stock_tx_${currentUser?.username || 'guest'}`);
-        if (tSaved) { try { transactions = JSON.parse(tSaved); } catch (e) { transactions = []; } }
-        else { transactions = []; }
-        products.forEach(p => { if (!p.supplier) p.supplier = ''; });
-        loadOrgName();
-        loadReportHeaderName();
-        renderDashboard();
-        renderInventory();
-        renderTransactions();
-        populateReportProducts();
-        populateSupplierFilter();
-        renderActiveReport();
-    }
+   async function loadData() {
+    const user = authUser || (await supabaseClient.auth.getUser()).data.user;
+    
+    if (user) {
+        // Fetch products from Supabase
+        const { data: pData, error: pErr } = await supabaseClient
+            .from('stock_products')
+            .select('*')
+            .order('id', { ascending: false });
 
-    function saveData() {
-        if (currentUser?.username) {
-            localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
-            localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
+        if (!pErr && pData) {
+            products = pData;
+            localStorage.setItem(`stock_products_${currentUser?.username || 'guest'}`, JSON.stringify(products));
         }
-        renderDashboard();
-        renderInventory();
-        renderTransactions();
-        populateReportProducts();
-        populateSupplierFilter();
-        renderActiveReport();
+
+        // Fetch transactions from Supabase
+        const { data: tData, error: tErr } = await supabaseClient
+            .from('stock_transactions')
+            .select('*')
+            .order('id', { ascending: false });
+
+        if (!tErr && tData) {
+            transactions = tData;
+            localStorage.setItem(`stock_tx_${currentUser?.username || 'guest'}`, JSON.stringify(transactions));
+        }
+    } else {
+        // Fallback to local storage if offline or not logged in
+        const pSaved = localStorage.getItem(`stock_products_${currentUser?.username || 'guest'}`);
+        products = pSaved ? JSON.parse(pSaved) : [];
+
+        const tSaved = localStorage.getItem(`stock_tx_${currentUser?.username || 'guest'}`);
+        transactions = tSaved ? JSON.parse(tSaved) : [];
     }
 
-    window.syncWithGoogleDrive = function(notify = false) {
-        saveData();
-        if (notify) showToast("Data saved on this device!");
-    };
+    products.forEach(p => { if (!p.supplier) p.supplier = ''; });
+    loadOrgName();
+    loadReportHeaderName();
+    renderDashboard();
+    renderInventory();
+    renderTransactions();
+    populateReportProducts();
+    populateSupplierFilter();
+    renderActiveReport();
+}
+
+async function saveData() {
+    // 1. Always keep local backup instantly updated
+    if (currentUser?.username) {
+        localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
+        localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
+    }
+
+    // 2. Sync to Supabase Database
+    const user = authUser || (await supabaseClient.auth.getUser()).data.user;
+    if (user) {
+        // Replace all current user records to maintain exact list state
+        await supabaseClient.from('stock_products').delete().eq('user_id', user.id);
+        if (products.length > 0) {
+            const pPayload = products.map(p => ({
+                user_id: user.id,
+                username: currentUser.username,
+                name: p.name,
+                supplier: p.supplier || '',
+                qty: parseInt(p.qty) || 0,
+                reminder: p.reminder || '',
+                threshold: parseInt(p.threshold) || 2
+            }));
+            await supabaseClient.from('stock_products').insert(pPayload);
+        }
+
+        await supabaseClient.from('stock_transactions').delete().eq('user_id', user.id);
+        if (transactions.length > 0) {
+            const tPayload = transactions.map(t => ({
+                user_id: user.id,
+                username: currentUser.username,
+                date: t.date,
+                product: t.product,
+                type: t.type,
+                qty: parseInt(t.qty) || 0,
+                desc: t.desc || ''
+            }));
+            await supabaseClient.from('stock_transactions').insert(tPayload);
+        }
+    }
+
+    renderDashboard();
+    renderInventory();
+    renderTransactions();
+    populateReportProducts();
+    populateSupplierFilter();
+    renderActiveReport();
+}
+
+window.syncWithGoogleDrive = async function(notify = false) {
+    showToast("Syncing with Supabase...");
+    await saveData();
+    await loadData();
+    if (notify) showToast("Synced successfully with Cloud database!");
+};
 
     function getProductCurrentStock(productName) {
         const prod = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
