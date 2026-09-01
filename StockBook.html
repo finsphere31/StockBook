@@ -128,7 +128,7 @@
     .hero-banner-card {
         margin: 10px 0 12px;
         background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #075985 100%);
-        border-radius: 20px;
+        border-radius: 15px;
         padding: 18px;
         color: #ffffff;
         box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.35);
@@ -139,7 +139,7 @@
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 12px;
+        margin-bottom: 5px;
     }
     .hero-greeting {
         font-size: 17px;
@@ -190,8 +190,8 @@
         align-items: flex-end;
     }
     .hero-bal-amount {
-        font-size: 24px;
-        font-weight: 900;
+        font-size: 18px;
+        font-weight: 800;
         letter-spacing: -0.5px;
     }
 
@@ -1133,9 +1133,10 @@ font-size: 12px;
             border-bottom: 1px solid #d8e2ec;
         }
         body.app-logged-in .user-avatar-pill {
-            background: rgba(255, 255, 255, 0.7);
-            border: 1px solid #d8e2ec;
-        }
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid #d8e2ec;
+    margin-left: auto;
+   }
         body.app-logged-in .app-header-left {
             display: none; /* brand now lives in the sidebar on desktop */
         }
@@ -1173,6 +1174,18 @@ font-size: 12px;
         body.app-logged-in .report-pdf-btn { padding: 10px 18px; font-size: 12.5px; }
         body.app-logged-in .report-menu-item-title { font-size: 14.5px; }
     }
+
+    /* ===== COMPACT DASHBOARD FOR COMPUTER / LAPTOP ===== */
+@media (min-width: 768px) {
+    .app-screen-section {
+        zoom: 0.98;
+    }
+
+    .hero-banner-card {
+        margin-top: 2px;
+        margin-bottom: 2px;
+    }
+}
 </style>
 
 </head>
@@ -1191,15 +1204,6 @@ font-size: 12px;
         <button class="side-nav-item" id="sideNav-reports" onclick="switchSection('reports')"><span class="icon">📈</span><span>Reports</span></button>
         <button class="side-nav-item" id="sideNav-settings" onclick="switchSection('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
     </div>
-
-    <div class="sidebar-footer">
-        <div class="sidebar-user-row" onclick="promptSimpleLogout()" title="Logout">
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar">
-            <div style="flex:1; min-width:0;">
-                <div class="sidebar-user-name" id="sideUserNameLabel">User</div>
-                <div class="sidebar-user-logout">Logout</div>
-            </div>
-        </div>
     </div>
 </nav>
 
@@ -1232,8 +1236,6 @@ font-size: 12px;
         </div>
 
         <button class="fintrack-btn" id="authSubmitBtn" onclick="handleAuthSubmit()">Login</button>
-
-        <button class="fintrack-btn" id="biometricLoginBtn" style="display:none; margin-top:8px; background:#0f172a;" onclick="handleBiometricLogin()">🔐 Login with Biometrics</button>
 
         <div class="fintrack-card-footer">
             <a onclick="openForgotModal()">Forgot Password?</a>
@@ -1477,21 +1479,6 @@ font-size: 12px;
             <div style="padding:11px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; cursor:pointer; font-size:12px; font-weight:700;" onclick="document.getElementById('restoreBackupInput').click()">📥 Restore from Backup</div>
             <div style="padding:11px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; cursor:pointer; font-size:12px; font-weight:700;" onclick="openChangePasswordModal()">🔒 Change Password</div>
         </div>
-
-        <div id="biometricSettingsBlock" style="display:none; margin-top:18px;">
-            <h3 style="margin-bottom: 10px; font-size: 14px; font-weight:800;">Security</h3>
-            <div style="padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
-                <div style="text-align:left;">
-                    <div style="font-size:13px; font-weight:800; color:#0f172a;">🔐 Biometric Login</div>
-                    <div id="biometricSettingDesc" style="font-size:10.5px; color:#64748b; margin-top:3px; max-width:230px;">Use your phone's fingerprint, Face ID, or device passkey to unlock StockTrack.</div>
-                </div>
-                <label style="position:relative; display:inline-block; width:44px; height:24px; flex:0 0 44px;">
-                    <input type="checkbox" id="biometricToggle" onchange="handleBiometricToggle(this)" style="opacity:0; width:0; height:0;">
-                    <span id="biometricToggleTrack" style="position:absolute; cursor:pointer; inset:0; background:#cbd5e1; border-radius:24px; transition:.2s;"></span>
-                    <span id="biometricToggleKnob" style="position:absolute; height:18px; width:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
-                </label>
-            </div>
-        </div>
     </div>
 
     <nav class="bottom-app-bar">
@@ -1693,16 +1680,6 @@ font-size: 12px;
     const SUPABASE_ANON_KEY = "sb_publishable_yjS5BAdz7ZPh5UqEkm610g_jV1mcpYI";
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ═══════════════════════════════════════════════════════════════════
-    // BIOMETRIC / WEBAUTHN CONFIG
-    // These two Edge Functions must be deployed to your Supabase project.
-    // See supabase/functions/webauthn-register and webauthn-authenticate
-    // in the delivered project files. They perform the actual cryptographic
-    // verification server-side — the browser alone can never be trusted to
-    // assert "this fingerprint matched".
-    // ═══════════════════════════════════════════════════════════════════
-    const WEBAUTHN_FN_BASE = `${SUPABASE_URL}/functions/v1/`;
-
     let authUser = null;
     let currentUser = JSON.parse(localStorage.getItem('stock_active_user')) || null;
     let products = [];
@@ -1791,8 +1768,6 @@ font-size: 12px;
             } else {
                 localStorage.removeItem(REMEMBER_KEY);
             }
-            // A successful normal login is the only trigger that ever surfaces the
-            // biometric setting for this device. Nothing biometric happens automatically.
             checkAuthSession();
         } catch (e) {
             showToast(friendlyAuthError(e), "error");
@@ -1838,12 +1813,10 @@ font-size: 12px;
             loadData();
             setTimeout(updateStickyOffsets, 50);
             initBackButtonHandling();
-            initBiometricSettingsUI();
         } else {
             document.getElementById('auth-screen-container').style.display = 'flex';
             document.getElementById('main-app-content').style.display = 'none';
             document.body.classList.remove('app-logged-in');
-            initBiometricLoginButton();
         }
     }
 
@@ -3167,9 +3140,6 @@ font-size: 12px;
     async function executeConfirmedLogout() {
         await supabaseClient.auth.signOut();
         localStorage.removeItem('stock_active_user');
-        // NOTE: we deliberately do NOT clear stock_webauthn_credential_id / the
-        // per-device biometric preference here — per spec, biometric registration
-        // survives logout so it can be offered again on the next visit.
         currentUser = null;
         authUser = null;
         products = [];
@@ -3330,396 +3300,6 @@ font-size: 12px;
         a.click();
         URL.revokeObjectURL(url);
         showToast("Backup downloaded!");
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // BIOMETRIC / WEBAUTHN LOGIN
-    //
-    // Design summary (see the delivered README for the full write-up):
-    //  • Device gate: only phones/tablets that support WebAuthn AND report a
-    //    platform authenticator (fingerprint/Face ID/screen-lock) ever see
-    //    any biometric UI. Desktops/laptops never do, even if WebAuthn is
-    //    technically present in the browser.
-    //  • Registration: after a normal Supabase login, the toggle triggers a
-    //    real navigator.credentials.create() passkey registration. The
-    //    challenge is minted server-side by the `webauthn-register` Edge
-    //    Function and the resulting public key is verified + stored there
-    //    too (never a secret — a public key can't be used to impersonate
-    //    the device without the private key, which never leaves the phone's
-    //    secure hardware).
-    //  • Login: navigator.credentials.get() produces a signed assertion.
-    //    That assertion is POSTed to the `webauthn-authenticate` Edge
-    //    Function, which verifies the signature against the stored public
-    //    key and, only on success, mints a real Supabase session (via a
-    //    short-lived Supabase admin action) and returns tokens to the
-    //    client. The client never fabricates a session itself.
-    //  • Nothing biometric is ever written to localStorage except a
-    //    non-secret per-device flag ("this browser has a passkey it can
-    //    try") and the WebAuthn credential ID, which is just an opaque
-    //    handle — not a secret, not usable without the matching private key
-    //    sealed in the device's secure hardware.
-    // ═══════════════════════════════════════════════════════════════════
-
-    const BIOMETRIC_CRED_ID_KEY = 'stock_webauthn_credential_id';   // per-device, not secret
-    const BIOMETRIC_USERNAME_KEY = 'stock_webauthn_username';        // which account this device's passkey belongs to
-
-    // ---- Device / capability detection --------------------------------
-    // Must be BOTH: (a) a touch-primary mobile/tablet device, and
-    // (b) WebAuthn is available with a platform authenticator (screen-lock/
-    // biometric) ready to use. Desktops/laptops fail (a) even if their
-    // browser technically implements WebAuthn.
-    function isLikelyMobileOrTabletDevice() {
-        const ua = navigator.userAgent || navigator.vendor || '';
-        const uaMobile = /Android|iPhone|iPad|iPod|Windows Phone|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-
-        // Modern Chromium exposes this hint directly.
-        if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean') {
-            if (navigator.userAgentData.mobile) return true;
-        }
-
-        // iPadOS 13+ reports itself as "Macintosh" with touch support, so a
-        // touch-capable "Mac" is treated as a tablet, not a desktop.
-        const isTouchMac = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
-
-        // Require touch as a corroborating signal so a desktop spoofing its
-        // UA string (or a touch-enabled laptop) doesn't get a false positive
-        // on UA alone.
-        const hasTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-        const narrowViewport = Math.min(window.screen.width, window.screen.height) <= 900;
-
-        return (uaMobile || isTouchMac) && hasTouch && narrowViewport;
-    }
-
-    let cachedBiometricCapable = null;
-    async function isBiometricCapableDevice() {
-        if (cachedBiometricCapable !== null) return cachedBiometricCapable;
-        try {
-            if (!isLikelyMobileOrTabletDevice()) { cachedBiometricCapable = false; return false; }
-            if (!window.PublicKeyCredential || typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') {
-                cachedBiometricCapable = false;
-                return false;
-            }
-            const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-            cachedBiometricCapable = !!available;
-            return cachedBiometricCapable;
-        } catch (e) {
-            cachedBiometricCapable = false;
-            return false;
-        }
-    }
-
-    // ---- base64url helpers for WebAuthn buffers ------------------------
-    function b64urlToBuf(b64url) {
-        const pad = '='.repeat((4 - (b64url.length % 4)) % 4);
-        const b64 = (b64url + pad).replace(/-/g, '+').replace(/_/g, '/');
-        const raw = atob(b64);
-        const buf = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
-        return buf.buffer;
-    }
-    function bufToB64url(buf) {
-        const bytes = new Uint8Array(buf);
-        let str = '';
-        for (let i = 0; i < bytes.byteLength; i++) str += String.fromCharCode(bytes[i]);
-        return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-
-    async function callWebauthnFn(path, body) {
-        const { data: sessionData } = await supabaseClient.auth.getSession();
-        const accessToken = sessionData?.session?.access_token;
-        const res = await fetch(WEBAUTHN_FN_BASE + path, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${accessToken || SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify(body || {})
-        });
-        let json = null;
-        try { json = await res.json(); } catch (e) { /* non-JSON error page */ }
-        if (!res.ok) {
-            throw new Error((json && json.error) || `Server error (${res.status})`);
-        }
-        return json;
-    }
-
-    // ---- Settings screen: show/hide + wire up toggle -------------------
-    async function initBiometricSettingsUI() {
-        const block = document.getElementById('biometricSettingsBlock');
-        const toggle = document.getElementById('biometricToggle');
-        if (!block || !toggle) return;
-
-        const capable = await isBiometricCapableDevice();
-        if (!capable) {
-            block.style.display = 'none';
-            return;
-        }
-        block.style.display = 'block';
-
-        const savedCredId = localStorage.getItem(BIOMETRIC_CRED_ID_KEY);
-        const savedUsername = localStorage.getItem(BIOMETRIC_USERNAME_KEY);
-        const enabledForThisUser = !!(savedCredId && savedUsername && currentUser && savedUsername === currentUser.username);
-
-        toggle.checked = enabledForThisUser;
-        renderBiometricToggleVisual(enabledForThisUser);
-    }
-
-    function renderBiometricToggleVisual(on) {
-        const track = document.getElementById('biometricToggleTrack');
-        const knob = document.getElementById('biometricToggleKnob');
-        const desc = document.getElementById('biometricSettingDesc');
-        if (track) track.style.background = on ? '#0284c7' : '#cbd5e1';
-        if (knob) knob.style.left = on ? '23px' : '3px';
-        if (desc) desc.innerText = on
-            ? "Your device biometric/passkey can be used to unlock StockTrack."
-            : "Use your phone's fingerprint, Face ID, or device passkey to unlock StockTrack.";
-    }
-
-    async function handleBiometricToggle(checkboxEl) {
-        const turningOn = checkboxEl.checked;
-        // Immediately reflect intent, but roll back visually if the flow fails —
-        // the setting must never end up ON without a verified registration.
-        renderBiometricToggleVisual(turningOn);
-
-        if (turningOn) {
-            const ok = await registerBiometricCredential();
-            if (!ok) {
-                checkboxEl.checked = false;
-                renderBiometricToggleVisual(false);
-            }
-        } else {
-            await disableBiometricCredential();
-            checkboxEl.checked = false;
-            renderBiometricToggleVisual(false);
-        }
-    }
-
-    async function registerBiometricCredential() {
-        try {
-            if (!currentUser?.username) {
-                showToast("Please log in normally first", "error");
-                return false;
-            }
-            if (!(await isBiometricCapableDevice())) {
-                showToast("This device doesn't support biometric login", "error");
-                return false;
-            }
-
-            showToast("Starting biometric setup...");
-
-            // 1) Ask the server (Edge Function) for a fresh registration challenge.
-            //    This call is authenticated with the person's current Supabase
-            //    session, so the server knows exactly which account to attach
-            //    the new passkey to.
-            const options = await callWebauthnFn('webauthn-register/options', {
-                username: currentUser.username
-            });
-
-            const publicKey = {
-                challenge: b64urlToBuf(options.challenge),
-                rp: options.rp,
-                user: {
-                    id: b64urlToBuf(options.user.id),
-                    name: options.user.name,
-                    displayName: options.user.displayName
-                },
-                pubKeyCredParams: options.pubKeyCredParams,
-                timeout: options.timeout || 60000,
-                attestation: 'none',
-                authenticatorSelection: {
-                    authenticatorAttachment: 'platform',
-                    userVerification: 'required',
-                    residentKey: 'preferred'
-                },
-                excludeCredentials: (options.excludeCredentials || []).map(c => ({
-                    id: b64urlToBuf(c.id), type: 'public-key'
-                }))
-            };
-
-            // 2) Ask the phone's secure authentication system (fingerprint /
-            //    Face ID / device passkey) to create the credential. This is the
-            //    real OS-level biometric prompt — nothing here is simulated.
-            const credential = await navigator.credentials.create({ publicKey });
-            if (!credential) throw new Error('Registration was cancelled');
-
-            const attestationResponse = {
-                id: credential.id,
-                rawId: bufToB64url(credential.rawId),
-                type: credential.type,
-                response: {
-                    clientDataJSON: bufToB64url(credential.response.clientDataJSON),
-                    attestationObject: bufToB64url(credential.response.attestationObject)
-                }
-            };
-
-            // 3) Server verifies the attestation cryptographically and stores
-            //    only the resulting PUBLIC key + credential id — never a secret.
-            await callWebauthnFn('webauthn-register/verify', {
-                username: currentUser.username,
-                credential: attestationResponse
-            });
-
-            localStorage.setItem(BIOMETRIC_CRED_ID_KEY, credential.id);
-            localStorage.setItem(BIOMETRIC_USERNAME_KEY, currentUser.username);
-
-            showToast("Biometric login enabled successfully.");
-            return true;
-        } catch (e) {
-            console.warn('Biometric registration failed:', e);
-            if (e && (e.name === 'NotAllowedError' || /cancel/i.test(e.message || ''))) {
-                showToast("Biometric setup cancelled", "error");
-            } else if (e && e.name === 'InvalidStateError') {
-                showToast("This device already has a passkey registered", "error");
-            } else {
-                showToast(friendlyWebauthnError(e), "error");
-            }
-            return false;
-        }
-    }
-
-    async function disableBiometricCredential() {
-        try {
-            const credId = localStorage.getItem(BIOMETRIC_CRED_ID_KEY);
-            if (credId && currentUser?.username) {
-                // Best-effort server-side revocation of this device's credential.
-                // Even if this call fails (offline, etc.), we still remove the
-                // local pointer below so this device stops offering biometric
-                // login immediately.
-                try {
-                    await callWebauthnFn('webauthn-register/revoke', {
-                        username: currentUser.username,
-                        credentialId: credId
-                    });
-                } catch (revokeErr) {
-                    console.warn('Could not revoke credential server-side:', revokeErr);
-                }
-            }
-        } finally {
-            localStorage.removeItem(BIOMETRIC_CRED_ID_KEY);
-            localStorage.removeItem(BIOMETRIC_USERNAME_KEY);
-            showToast("Biometric login disabled.");
-        }
-    }
-
-    // ---- Login screen: show/hide the biometric button ------------------
-    async function initBiometricLoginButton() {
-        const btn = document.getElementById('biometricLoginBtn');
-        if (!btn) return;
-
-        const capable = await isBiometricCapableDevice();
-        const credId = localStorage.getItem(BIOMETRIC_CRED_ID_KEY);
-        const savedUsername = localStorage.getItem(BIOMETRIC_USERNAME_KEY);
-
-        if (capable && credId && savedUsername) {
-            btn.style.display = 'block';
-            btn.dataset.username = savedUsername;
-        } else {
-            btn.style.display = 'none';
-        }
-    }
-
-    async function handleBiometricLogin() {
-        const btn = document.getElementById('biometricLoginBtn');
-        const username = btn?.dataset?.username || localStorage.getItem(BIOMETRIC_USERNAME_KEY);
-        const credId = localStorage.getItem(BIOMETRIC_CRED_ID_KEY);
-
-        if (!username || !credId) {
-            showToast("No biometric login set up on this device yet", "error");
-            return;
-        }
-
-        const originalLabel = btn.innerText;
-        btn.disabled = true;
-        btn.innerText = 'Waiting for biometric...';
-
-        try {
-            // 1) Get a fresh, single-use login challenge from the server.
-            const options = await fetch(WEBAUTHN_FN_BASE + 'webauthn-authenticate/options', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-                body: JSON.stringify({ username })
-            }).then(async r => {
-                const j = await r.json().catch(() => null);
-                if (!r.ok) throw new Error((j && j.error) || 'Could not start biometric login');
-                return j;
-            });
-
-            const publicKey = {
-                challenge: b64urlToBuf(options.challenge),
-                timeout: options.timeout || 60000,
-                rpId: options.rpId,
-                userVerification: 'required',
-                allowCredentials: (options.allowCredentials || []).map(c => ({
-                    id: b64urlToBuf(c.id), type: 'public-key'
-                }))
-            };
-
-            // 2) Real OS-level biometric/passkey prompt on the device.
-            const assertion = await navigator.credentials.get({ publicKey });
-            if (!assertion) throw new Error('Biometric authentication was cancelled');
-
-            const assertionResponse = {
-                id: assertion.id,
-                rawId: bufToB64url(assertion.rawId),
-                type: assertion.type,
-                response: {
-                    clientDataJSON: bufToB64url(assertion.response.clientDataJSON),
-                    authenticatorData: bufToB64url(assertion.response.authenticatorData),
-                    signature: bufToB64url(assertion.response.signature),
-                    userHandle: assertion.response.userHandle ? bufToB64url(assertion.response.userHandle) : null
-                }
-            };
-
-            // 3) Server verifies the signature against the stored public key.
-            //    Only on success does it mint real Supabase session tokens —
-            //    the client never fabricates a session on its own.
-            const verifyRes = await fetch(WEBAUTHN_FN_BASE + 'webauthn-authenticate/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-                body: JSON.stringify({ username, credential: assertionResponse })
-            }).then(async r => {
-                const j = await r.json().catch(() => null);
-                if (!r.ok) throw new Error((j && j.error) || 'Biometric verification failed');
-                return j;
-            });
-
-            if (!verifyRes?.access_token || !verifyRes?.refresh_token) {
-                throw new Error('Server did not return a valid session');
-            }
-
-            // 4) Adopt the verified Supabase session — same session mechanism
-            //    as a normal password login, nothing bypassed.
-            const { error: setSessionError } = await supabaseClient.auth.setSession({
-                access_token: verifyRes.access_token,
-                refresh_token: verifyRes.refresh_token
-            });
-            if (setSessionError) throw setSessionError;
-
-            currentUser = { username };
-            localStorage.setItem('stock_active_user', JSON.stringify(currentUser));
-            showToast("Welcome back!");
-            checkAuthSession();
-        } catch (e) {
-            console.warn('Biometric login failed:', e);
-            showToast(friendlyWebauthnError(e), "error");
-            // Always fall back cleanly to the normal login form — never leave
-            // the person stuck on a loading state.
-        } finally {
-            btn.disabled = false;
-            btn.innerText = originalLabel;
-        }
-    }
-
-    function friendlyWebauthnError(e) {
-        const name = e && e.name;
-        const msg = (e && e.message) || '';
-        if (name === 'NotAllowedError' || /cancel/i.test(msg)) return "Biometric authentication cancelled — use normal login instead";
-        if (name === 'InvalidStateError') return "Credential already registered on this device";
-        if (name === 'NotSupportedError') return "This device doesn't support biometric login";
-        if (/network|fetch/i.test(msg)) return "Network error — use normal login instead";
-        if (msg) return `${msg} — use normal login instead`;
-        return "Biometric login unavailable — use normal login instead";
     }
 
     document.addEventListener('DOMContentLoaded', function() {
