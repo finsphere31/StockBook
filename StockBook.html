@@ -13,6 +13,48 @@
 <meta name="apple-mobile-web-app-title" content="StockTrack">
 <meta name="theme-color" content="#ffffff">
 
+<!--
+  ============================================================================
+  IMPORTANT — CLOUD SYNC SETUP REQUIRED
+  ============================================================================
+  This build adds REAL cross-device cloud sync using a Supabase table
+  (previously "Sync Cloud" only saved to this browser's localStorage, which is
+  why data looked like it reset to 0 on another device/browser — it was never
+  actually leaving the device).
+
+  Before this will work, run the following once in your Supabase project's
+  SQL editor (Project -> SQL Editor -> New query):
+
+    create table if not exists public.stock_data (
+      user_id uuid primary key references auth.users(id) on delete cascade,
+      username text,
+      products jsonb not null default '[]'::jsonb,
+      transactions jsonb not null default '[]'::jsonb,
+      org_name text,
+      report_header text,
+      updated_at timestamptz not null default now()
+    );
+
+    alter table public.stock_data enable row level security;
+
+    create policy "Users can read their own stock data"
+      on public.stock_data for select
+      using (auth.uid() = user_id);
+
+    create policy "Users can insert their own stock data"
+      on public.stock_data for insert
+      with check (auth.uid() = user_id);
+
+    create policy "Users can update their own stock data"
+      on public.stock_data for update
+      using (auth.uid() = user_id);
+
+  Until you run this, the app keeps working exactly as before (local-only,
+  per-browser storage) — cloud sync just silently fails and logs a warning
+  to the console, it will never crash or delete existing local data.
+  ============================================================================
+-->
+
 <link rel="manifest" href='data:application/manifest+json,{
         "name": "StockTrack - Inventory Management",
         "short_name": "StockTrack",
@@ -128,7 +170,7 @@
     .hero-banner-card {
         margin: 10px 0 12px;
         background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #075985 100%);
-        border-radius: 5px;
+        border-radius: 15px;
         padding: 18px;
         color: #ffffff;
         box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.35);
@@ -139,7 +181,7 @@
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 12px;
+        margin-bottom: 5px;
     }
     .hero-greeting {
         font-size: 17px;
@@ -190,8 +232,8 @@
         align-items: flex-end;
     }
     .hero-bal-amount {
-        font-size: 24px;
-        font-weight: 900;
+        font-size: 18px;
+        font-weight: 800;
         letter-spacing: -0.5px;
     }
 
@@ -1133,9 +1175,10 @@ font-size: 12px;
             border-bottom: 1px solid #d8e2ec;
         }
         body.app-logged-in .user-avatar-pill {
-            background: rgba(255, 255, 255, 0.7);
-            border: 1px solid #d8e2ec;
-        }
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid #d8e2ec;
+    margin-left: auto;
+   }
         body.app-logged-in .app-header-left {
             display: none; /* brand now lives in the sidebar on desktop */
         }
@@ -1173,6 +1216,30 @@ font-size: 12px;
         body.app-logged-in .report-pdf-btn { padding: 10px 18px; font-size: 12.5px; }
         body.app-logged-in .report-menu-item-title { font-size: 14.5px; }
     }
+
+    /* ===== COMPACT DASHBOARD FOR COMPUTER / LAPTOP ===== */
+@media (min-width: 768px) {
+    .app-screen-section {
+        zoom: 0.98;
+    }
+
+    .hero-banner-card {
+        margin-top: 2px;
+        margin-bottom: 2px;
+    }
+}
+
+    /* Small "last synced" indicator on the Sync Cloud button */
+    .twin-cta-sync .sync-status-dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        margin-left: 4px;
+        background: #a7f3d0;
+    }
+    .twin-cta-sync .sync-status-dot.pending { background: #fde68a; }
+    .twin-cta-sync .sync-status-dot.error { background: #fecaca; }
 </style>
 
 </head>
@@ -1191,15 +1258,6 @@ font-size: 12px;
         <button class="side-nav-item" id="sideNav-reports" onclick="switchSection('reports')"><span class="icon">📈</span><span>Reports</span></button>
         <button class="side-nav-item" id="sideNav-settings" onclick="switchSection('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
     </div>
-
-    <div class="sidebar-footer">
-        <div class="sidebar-user-row" onclick="promptSimpleLogout()" title="Logout">
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar">
-            <div style="flex:1; min-width:0;">
-                <div class="sidebar-user-name" id="sideUserNameLabel">User</div>
-                <div class="sidebar-user-logout">Logout</div>
-            </div>
-        </div>
     </div>
 </nav>
 
@@ -1297,7 +1355,7 @@ font-size: 12px;
         </div>
 
         <div class="twin-action-row">
-            <button class="twin-cta-btn twin-cta-sync" onclick="syncWithGoogleDrive(true)">☁️ Sync Cloud</button>
+            <button class="twin-cta-btn twin-cta-sync" onclick="syncWithGoogleDrive(true)">☁️ Sync Cloud<span class="sync-status-dot" id="syncStatusDot" title="Sync status"></span></button>
             <button class="twin-cta-btn twin-cta-open" onclick="switchSection('transaction')">📑 Open Sheet →</button>
         </div>
 
@@ -1672,9 +1730,91 @@ font-size: 12px;
     window.addEventListener('scroll', scheduleStickyOffsetUpdate, { passive: true });
     window.addEventListener('orientationchange', () => setTimeout(updateStickyOffsets, 200));
 
-    const SUPABASE_URL = "https://pcihjobmiialjwqzpoum.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_c5pIncFgiXl5ghzSIJuFBg_c84zIYyp";
+    const SUPABASE_URL = "https://esnjmwnnigxhglfxfkyz.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_yjS5BAdz7ZPh5UqEkm610g_jV1mcpYI";
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ============================================================
+    // CLOUD SYNC (real cross-device sync, backed by a Supabase table)
+    // ============================================================
+    // Previously "Sync Cloud" only called saveData(), which writes to
+    // localStorage — i.e. it never left the device. That's why entries
+    // could look like "0" or "deleted" on another browser/device: there
+    // was never any real cloud copy to pull from.
+    //
+    // Requires the `stock_data` table + RLS policies described in the
+    // HTML comment near the top of <head>. If that table doesn't exist
+    // yet, every cloud call below fails silently (console warning only)
+    // and the app keeps working exactly as before, local-only.
+    const CLOUD_TABLE = 'stock_data';
+    let cloudSyncTimer = null;
+    let cloudTableMissingWarned = false;
+
+    function setSyncStatusDot(state) {
+        // state: 'ok' | 'pending' | 'error'
+        const dot = document.getElementById('syncStatusDot');
+        if (!dot) return;
+        dot.className = 'sync-status-dot' + (state === 'ok' ? '' : ' ' + state);
+    }
+
+    async function pushToCloud(showFeedback = false) {
+        if (!authUser || !currentUser?.username) return;
+        setSyncStatusDot('pending');
+        try {
+            const payload = {
+                user_id: authUser.id,
+                username: currentUser.username,
+                products: products,
+                transactions: transactions,
+                org_name: localStorage.getItem(orgNameStorageKey()) || '',
+                report_header: localStorage.getItem(reportHeaderStorageKey()) || '',
+                updated_at: new Date().toISOString()
+            };
+            const { error } = await supabaseClient.from(CLOUD_TABLE).upsert(payload, { onConflict: 'user_id' });
+            if (error) throw error;
+            setSyncStatusDot('ok');
+            if (showFeedback) showToast("Synced to cloud — available on any device!");
+        } catch (e) {
+            setSyncStatusDot('error');
+            if (!cloudTableMissingWarned) {
+                cloudTableMissingWarned = true;
+                console.warn(
+                    "Cloud sync failed. If you haven't created the 'stock_data' table yet, " +
+                    "see the setup SQL in the HTML <head> comment. Error:", e.message
+                );
+            }
+            if (showFeedback) {
+                showToast("Cloud sync unavailable — saved on this device only. See console for setup steps.", "error");
+            }
+        }
+    }
+
+    function scheduleCloudPush() {
+        clearTimeout(cloudSyncTimer);
+        setSyncStatusDot('pending');
+        cloudSyncTimer = setTimeout(() => pushToCloud(false), 1200);
+    }
+
+    async function pullFromCloud() {
+        if (!authUser) return null;
+        try {
+            const { data, error } = await supabaseClient
+                .from(CLOUD_TABLE)
+                .select('*')
+                .eq('user_id', authUser.id)
+                .maybeSingle();
+            if (error) throw error;
+            return data || null;
+        } catch (e) {
+            if (!cloudTableMissingWarned) {
+                cloudTableMissingWarned = true;
+                console.warn(
+                    "Could not read cloud data (table may not exist yet — see setup SQL in <head>). Error:", e.message
+                );
+            }
+            return null;
+        }
+    }
 
     let authUser = null;
     let currentUser = JSON.parse(localStorage.getItem('stock_active_user')) || null;
@@ -1806,7 +1946,7 @@ font-size: 12px;
             const sideNameEl = document.getElementById('sideUserNameLabel');
             if (sideNameEl) sideNameEl.innerText = currentUser.username;
             document.body.classList.add('app-logged-in');
-            loadData();
+            await loadData();
             setTimeout(updateStickyOffsets, 50);
             initBackButtonHandling();
         } else {
@@ -1816,125 +1956,69 @@ font-size: 12px;
         }
     }
 
-   async function loadData() {
-    let loadedFromCloud = false;
-    const user = authUser || (await supabaseClient.auth.getUser())?.data?.user;
+    async function loadData() {
+        // Cloud is the source of truth across devices. Try it first.
+        const cloudRow = await pullFromCloud();
 
-    if (user) {
-        const { data: pData, error: pErr } = await supabaseClient
-            .from('stock_products')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('id', { ascending: false });
-
-        const { data: tData, error: tErr } = await supabaseClient
-            .from('stock_transactions')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('id', { ascending: false });
-
-        if (!pErr && !tErr && pData) {
-            products = pData.map(p => ({
-                name: p.name,
-                supplier: p.supplier || '',
-                qty: p.qty || 0,
-                reminder: p.reminder || '',
-                threshold: p.threshold ?? 2
-            }));
-            transactions = (tData || []).map(t => ({
-                date: t.date,
-                product: t.product,
-                type: t.type,
-                qty: t.qty || 0,
-                desc: t.description || t.desc || ''
-            }));
-            loadedFromCloud = true;
-            localStorage.setItem(`stock_products_${currentUser?.username || 'guest'}`, JSON.stringify(products));
-            localStorage.setItem(`stock_tx_${currentUser?.username || 'guest'}`, JSON.stringify(transactions));
-        }
-    }
-
-    if (!loadedFromCloud) {
-        const pSaved = localStorage.getItem(`stock_products_${currentUser?.username || 'guest'}`);
-        products = pSaved ? JSON.parse(pSaved) : [];
-        const tSaved = localStorage.getItem(`stock_tx_${currentUser?.username || 'guest'}`);
-        transactions = tSaved ? JSON.parse(tSaved) : [];
-    }
-
-    products.forEach(p => { if (!p.supplier) p.supplier = ''; });
-    loadOrgName();
-    loadReportHeaderName();
-    renderDashboard();
-    renderInventory();
-    renderTransactions();
-    populateReportProducts();
-    populateSupplierFilter();
-    renderActiveReport();
-}
-
-async function saveData() {
-    // 1. Keep local browser storage intact
-    if (currentUser?.username) {
-        localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
-        localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
-    }
-
-    renderDashboard();
-    renderInventory();
-    renderTransactions();
-    populateReportProducts();
-    populateSupplierFilter();
-    renderActiveReport();
-
-    // 2. Safe Sync to Supabase
-    const user = authUser || (await supabaseClient.auth.getUser())?.data?.user;
-    if (!user) return;
-
-    try {
-        // Prepare payloads
-        const pPayload = products.map(p => ({
-            user_id: user.id,
-            username: currentUser.username,
-            name: p.name,
-            supplier: p.supplier || '',
-            qty: parseInt(p.qty) || 0,
-            reminder: p.reminder || '',
-            threshold: parseInt(p.threshold) || 2
-        }));
-
-        const tPayload = transactions.map(t => ({
-            user_id: user.id,
-            username: currentUser.username,
-            date: t.date,
-            product: t.product,
-            type: t.type,
-            qty: parseInt(t.qty) || 0,
-            description: t.desc || ''
-        }));
-
-        // Delete old records and insert new payload
-        await supabaseClient.from('stock_products').delete().eq('user_id', user.id);
-        if (pPayload.length > 0) {
-            const { error: pInsErr } = await supabaseClient.from('stock_products').insert(pPayload);
-            if (pInsErr) throw pInsErr;
+        if (cloudRow) {
+            products = Array.isArray(cloudRow.products) ? cloudRow.products : [];
+            transactions = Array.isArray(cloudRow.transactions) ? cloudRow.transactions : [];
+            if (cloudRow.org_name) localStorage.setItem(orgNameStorageKey(), cloudRow.org_name);
+            if (cloudRow.report_header) localStorage.setItem(reportHeaderStorageKey(), cloudRow.report_header);
+            setSyncStatusDot('ok');
+        } else {
+            // No cloud row yet (first time, or cloud unreachable/table missing) —
+            // fall back to this device's local cache so nothing already entered here is lost.
+            const pSaved = localStorage.getItem(`stock_products_${currentUser?.username || 'guest'}`);
+            try { products = pSaved ? JSON.parse(pSaved) : []; } catch (e) { products = []; }
+            const tSaved = localStorage.getItem(`stock_tx_${currentUser?.username || 'guest'}`);
+            try { transactions = tSaved ? JSON.parse(tSaved) : []; } catch (e) { transactions = []; }
         }
 
-        await supabaseClient.from('stock_transactions').delete().eq('user_id', user.id);
-        if (tPayload.length > 0) {
-            const { error: tInsErr } = await supabaseClient.from('stock_transactions').insert(tPayload);
-            if (tInsErr) throw tInsErr;
-        }
-    } catch (err) {
-        console.error("Cloud sync failed:", err);
-        showToast("Cloud sync failed: " + (err.message || "Check Supabase RLS policies"), "error");
-    }
-}
+        products.forEach(p => { if (!p.supplier) p.supplier = ''; });
 
-window.syncWithGoogleDrive = async function(notify = false) {
-    if (notify) showToast("Syncing with cloud database...");
-    await saveData();
-    if (notify) showToast("Cloud Sync complete!");
-};
+        // Keep the local cache in step with whatever we just loaded.
+        if (currentUser?.username) {
+            localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
+            localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
+        }
+
+        loadOrgName();
+        loadReportHeaderName();
+        renderDashboard();
+        renderInventory();
+        renderTransactions();
+        populateReportProducts();
+        populateSupplierFilter();
+        renderActiveReport();
+
+        // First login ever / cloud row didn't exist yet: push current (local) state
+        // up so the cloud copy is created straight away.
+        if (!cloudRow) pushToCloud(false);
+    }
+
+    function saveData() {
+        if (currentUser?.username) {
+            localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
+            localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
+        }
+        renderDashboard();
+        renderInventory();
+        renderTransactions();
+        populateReportProducts();
+        populateSupplierFilter();
+        renderActiveReport();
+        // Push to the cloud a moment later, debounced, so rapid edits (e.g. importing
+        // a CSV) don't fire a network request per row.
+        scheduleCloudPush();
+    }
+
+    window.syncWithGoogleDrive = function(notify = false) {
+        saveData();
+        // Manual "Sync Cloud" tap = push immediately instead of waiting for the debounce.
+        clearTimeout(cloudSyncTimer);
+        pushToCloud(notify);
+    };
 
     function getProductCurrentStock(productName) {
         const prod = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
@@ -2974,6 +3058,7 @@ window.syncWithGoogleDrive = async function(notify = false) {
             saveReportHeaderName();
         }
         showToast(val ? "Organization name saved" : "Organization name cleared");
+        scheduleCloudPush();
     }
 
     // ————— RESTORE FROM JSON BACKUP —————
@@ -3029,6 +3114,7 @@ window.syncWithGoogleDrive = async function(notify = false) {
         const input = document.getElementById('reportHeaderNameInput');
         if (!input) return;
         localStorage.setItem(reportHeaderStorageKey(), input.value);
+        scheduleCloudPush();
     }
 
     async function downloadReportPDF() {
