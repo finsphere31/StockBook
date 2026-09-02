@@ -1817,35 +1817,46 @@ font-size: 12px;
     }
 
    async function loadData() {
-    const user = authUser || (await supabaseClient.auth.getUser()).data.user;
-    
+    let loadedFromCloud = false;
+    const user = authUser || (await supabaseClient.auth.getUser())?.data?.user;
+
     if (user) {
-        // Fetch products from Supabase
         const { data: pData, error: pErr } = await supabaseClient
             .from('stock_products')
             .select('*')
+            .eq('user_id', user.id)
             .order('id', { ascending: false });
 
-        if (!pErr && pData) {
-            products = pData;
-            localStorage.setItem(`stock_products_${currentUser?.username || 'guest'}`, JSON.stringify(products));
-        }
-
-        // Fetch transactions from Supabase
         const { data: tData, error: tErr } = await supabaseClient
             .from('stock_transactions')
             .select('*')
+            .eq('user_id', user.id)
             .order('id', { ascending: false });
 
-        if (!tErr && tData) {
-            transactions = tData;
+        if (!pErr && !tErr && pData) {
+            products = pData.map(p => ({
+                name: p.name,
+                supplier: p.supplier || '',
+                qty: p.qty || 0,
+                reminder: p.reminder || '',
+                threshold: p.threshold ?? 2
+            }));
+            transactions = (tData || []).map(t => ({
+                date: t.date,
+                product: t.product,
+                type: t.type,
+                qty: t.qty || 0,
+                desc: t.description || t.desc || ''
+            }));
+            loadedFromCloud = true;
+            localStorage.setItem(`stock_products_${currentUser?.username || 'guest'}`, JSON.stringify(products));
             localStorage.setItem(`stock_tx_${currentUser?.username || 'guest'}`, JSON.stringify(transactions));
         }
-    } else {
-        // Fallback to local storage if offline or not logged in
+    }
+
+    if (!loadedFromCloud) {
         const pSaved = localStorage.getItem(`stock_products_${currentUser?.username || 'guest'}`);
         products = pSaved ? JSON.parse(pSaved) : [];
-
         const tSaved = localStorage.getItem(`stock_tx_${currentUser?.username || 'guest'}`);
         transactions = tSaved ? JSON.parse(tSaved) : [];
     }
@@ -1862,43 +1873,10 @@ font-size: 12px;
 }
 
 async function saveData() {
-    // 1. Always keep local backup instantly updated
+    // 1. Keep local browser storage intact
     if (currentUser?.username) {
         localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
         localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
-    }
-
-    // 2. Sync to Supabase Database
-    const user = authUser || (await supabaseClient.auth.getUser()).data.user;
-    if (user) {
-        // Replace all current user records to maintain exact list state
-        await supabaseClient.from('stock_products').delete().eq('user_id', user.id);
-        if (products.length > 0) {
-            const pPayload = products.map(p => ({
-                user_id: user.id,
-                username: currentUser.username,
-                name: p.name,
-                supplier: p.supplier || '',
-                qty: parseInt(p.qty) || 0,
-                reminder: p.reminder || '',
-                threshold: parseInt(p.threshold) || 2
-            }));
-            await supabaseClient.from('stock_products').insert(pPayload);
-        }
-
-        await supabaseClient.from('stock_transactions').delete().eq('user_id', user.id);
-        if (transactions.length > 0) {
-            const tPayload = transactions.map(t => ({
-                user_id: user.id,
-                username: currentUser.username,
-                date: t.date,
-                product: t.product,
-                type: t.type,
-                qty: parseInt(t.qty) || 0,
-                desc: t.desc || ''
-            }));
-            await supabaseClient.from('stock_transactions').insert(tPayload);
-        }
     }
 
     renderDashboard();
@@ -1907,13 +1885,55 @@ async function saveData() {
     populateReportProducts();
     populateSupplierFilter();
     renderActiveReport();
+
+    // 2. Safe Sync to Supabase
+    const user = authUser || (await supabaseClient.auth.getUser())?.data?.user;
+    if (!user) return;
+
+    try {
+        // Prepare payloads
+        const pPayload = products.map(p => ({
+            user_id: user.id,
+            username: currentUser.username,
+            name: p.name,
+            supplier: p.supplier || '',
+            qty: parseInt(p.qty) || 0,
+            reminder: p.reminder || '',
+            threshold: parseInt(p.threshold) || 2
+        }));
+
+        const tPayload = transactions.map(t => ({
+            user_id: user.id,
+            username: currentUser.username,
+            date: t.date,
+            product: t.product,
+            type: t.type,
+            qty: parseInt(t.qty) || 0,
+            description: t.desc || ''
+        }));
+
+        // Delete old records and insert new payload
+        await supabaseClient.from('stock_products').delete().eq('user_id', user.id);
+        if (pPayload.length > 0) {
+            const { error: pInsErr } = await supabaseClient.from('stock_products').insert(pPayload);
+            if (pInsErr) throw pInsErr;
+        }
+
+        await supabaseClient.from('stock_transactions').delete().eq('user_id', user.id);
+        if (tPayload.length > 0) {
+            const { error: tInsErr } = await supabaseClient.from('stock_transactions').insert(tPayload);
+            if (tInsErr) throw tInsErr;
+        }
+    } catch (err) {
+        console.error("Cloud sync failed:", err);
+        showToast("Cloud sync failed: " + (err.message || "Check Supabase RLS policies"), "error");
+    }
 }
 
 window.syncWithGoogleDrive = async function(notify = false) {
-    showToast("Syncing with Supabase...");
+    if (notify) showToast("Syncing with cloud database...");
     await saveData();
-    await loadData();
-    if (notify) showToast("Synced successfully with Cloud database!");
+    if (notify) showToast("Cloud Sync complete!");
 };
 
     function getProductCurrentStock(productName) {
