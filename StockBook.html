@@ -1257,8 +1257,7 @@ font-size: 12px;
         <button class="side-nav-item" id="sideNav-inventory" onclick="switchSection('inventory')"><span class="icon">📦</span><span>Inventory</span></button>
         <button class="side-nav-item" id="sideNav-reports" onclick="switchSection('reports')"><span class="icon">📈</span><span>Reports</span></button>
         <button class="side-nav-item" id="sideNav-settings" onclick="switchSection('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
-    </div>
-    </div>
+    </div>    
 </nav>
 
 <div id="liveAutocompleteMenu" class="autocomplete-floating-menu"></div>
@@ -1355,7 +1354,9 @@ font-size: 12px;
         </div>
 
         <div class="twin-action-row">
-            <button class="twin-cta-btn twin-cta-sync" onclick="syncWithGoogleDrive(true)">☁️ Sync Cloud<span class="sync-status-dot" id="syncStatusDot" title="Sync status"></span></button>
+           <button class="twin-cta-btn twin-cta-sync" onclick="syncWithSupabase(true)">
+    ☁️ Sync Cloud<span class="sync-status-dot" id="syncStatusDot" title="Sync status"></span>
+</button>
             <button class="twin-cta-btn twin-cta-open" onclick="switchSection('transaction')">📑 Open Sheet →</button>
         </div>
 
@@ -1998,27 +1999,75 @@ font-size: 12px;
     }
 
     function saveData() {
-        if (currentUser?.username) {
-            localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
-            localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
-        }
-        renderDashboard();
-        renderInventory();
-        renderTransactions();
-        populateReportProducts();
-        populateSupplierFilter();
-        renderActiveReport();
-        // Push to the cloud a moment later, debounced, so rapid edits (e.g. importing
-        // a CSV) don't fire a network request per row.
-        scheduleCloudPush();
+    if (currentUser?.username) {
+        localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
+        localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
+    }
+    renderDashboard();
+    renderInventory();
+    renderTransactions();
+    populateReportProducts();
+    populateSupplierFilter();
+    renderActiveReport();
+
+    // Debounce background sync
+    clearTimeout(cloudSyncTimer);
+    setSyncStatusDot('pending');
+    cloudSyncTimer = setTimeout(() => pushToSupabase(false), 1500);
+}
+
+    // Function called directly by the button
+window.syncWithSupabase = async function(notify = false) {
+    if (!authUser || !authUser.id) {
+        showToast("Please log in to sync data to the cloud", "error");
+        return;
     }
 
-    window.syncWithGoogleDrive = function(notify = false) {
-        saveData();
-        // Manual "Sync Cloud" tap = push immediately instead of waiting for the debounce.
-        clearTimeout(cloudSyncTimer);
-        pushToCloud(notify);
-    };
+    // Save to local cache first
+    if (currentUser?.username) {
+        localStorage.setItem(`stock_products_${currentUser.username}`, JSON.stringify(products));
+        localStorage.setItem(`stock_tx_${currentUser.username}`, JSON.stringify(transactions));
+    }
+
+    // Clear debounce timer and push immediately
+    clearTimeout(cloudSyncTimer);
+    await pushToSupabase(notify);
+};
+
+// Core sync engine sending data to Supabase
+async function pushToSupabase(showFeedback = false) {
+    if (!authUser?.id || !currentUser?.username) return;
+
+    setSyncStatusDot('pending');
+    if (showFeedback) showToast("Syncing to cloud...");
+
+    try {
+        const payload = {
+            user_id: authUser.id,
+            username: currentUser.username,
+            products: products || [],
+            transactions: transactions || [],
+            org_name: localStorage.getItem(orgNameStorageKey()) || '',
+            report_header: localStorage.getItem(reportHeaderStorageKey()) || '',
+            updated_at: new Date().toISOString()
+        };
+
+        const { data, error } = await supabaseClient
+            .from('stock_data')
+            .upsert(payload, { onConflict: 'user_id' });
+
+        if (error) throw error;
+
+        setSyncStatusDot('ok');
+        if (showFeedback) showToast("Synced successfully to Supabase!", "success");
+    } catch (err) {
+        console.error("Supabase sync error:", err);
+        setSyncStatusDot('error');
+        if (showFeedback) {
+            showToast("Cloud sync failed: " + (err.message || "Unknown error"), "error");
+        }
+    }
+}
 
     function getProductCurrentStock(productName) {
         const prod = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
